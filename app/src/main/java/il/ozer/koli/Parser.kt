@@ -8,6 +8,7 @@ sealed class Cmd {
     data class SetTimer(val seconds: Int) : Cmd()
     data class Remind(val text: String, val timeMs: Long?) : Cmd()
     data class GeoRemind(val text: String, val place: String) : Cmd()
+    data class Message(val rest: String, val whatsapp: Boolean?) : Cmd()
     data class AddEvent(val title: String, val timeMs: Long?) : Cmd()
     data class SavePlace(val name: String) : Cmd()
     data class ShowEvents(val dayOffset: Int) : Cmd()
@@ -33,7 +34,7 @@ object Parser {
     )
 
     fun durationSeconds(s: String): Int {
-        var t = s
+        var t = Num.convert(s)
         var total = 0
         fun take(r: Regex, f: (MatchResult) -> Int) {
             r.findAll(t).forEach { total += f(it) }
@@ -62,11 +63,12 @@ object Parser {
         val now = System.currentTimeMillis()
 
         // 1. בעוד X
-        val rel = Regex("""בעוד\s+($DUR(?:\s+ו\d+\s*דקות)?)""").find(t)
+        val tn = Num.convert(t)
+        val rel = Regex("""בעוד\s+($DUR(?:\s+ו\d+\s*דקות)?)""").find(tn)
         if (rel != null) {
             val sec = durationSeconds(rel.groupValues[1])
             if (sec > 0) {
-                t = t.replace(rel.value, " ")
+                t = tn.replace(rel.value, " ")
                 return When(now + sec * 1000L, norm(t), true)
             }
         }
@@ -127,7 +129,7 @@ object Parser {
     private fun norm(s: String) = s.replace(Regex("\\s+"), " ").trim()
 
     // ---------- פקודות ----------
-    fun parse(raw: String): Cmd {
+    fun parse(raw: String, places: List<String> = emptyList()): Cmd {
         val s = normalize(raw)
 
         Regex("""^(?:תתקשר|התקשר|חייג|תחייג|תתקשרי|תחייגי)\s+(?:אל\s+)?(.+)$""").find(s)?.let {
@@ -136,7 +138,20 @@ object Parser {
             return Cmd.Call(n)
         }
 
-        if (s.contains("טיימר")) {
+        parseGeo(s, places)?.let { return it }
+
+        Regex("""^(?:תשלח|שלח|תשלחי|תכתוב|תכתבי|כתוב)\s+(.+)$""").find(s)?.let {
+            var r = it.groupValues[1]
+            if (!r.startsWith("לי ")) {
+                val wa = Regex("וואטסאפ|ווטסאפ|וואצאפ|ווצאפ|whatsapp", RegexOption.IGNORE_CASE).containsMatchIn(r)
+                val sms = Regex("sms|אסמס|מסרון", RegexOption.IGNORE_CASE).containsMatchIn(r)
+                r = r.replace(Regex("""(?<![א-ת])(?:ב|ב-)?(?:הודעה|הודעת|טקסט|וואטסאפ|ווטסאפ|וואצאפ|ווצאפ|sms|SMS|whatsapp)(?![א-ת])"""), " ")
+                r = r.replace(Regex("\\s+"), " ").trim()
+                return Cmd.Message(r, if (wa) true else if (sms) false else null)
+            }
+        }
+
+        if (Regex("ט[י]{1,3}מר").containsMatchIn(s)) {
             val sec = durationSeconds(s)
             if (s.contains("שבת") || s.contains("נרות")) return Cmd.ShabbatNow
             return if (sec > 0) Cmd.SetTimer(sec) else Cmd.Unknown(s)
@@ -147,7 +162,7 @@ object Parser {
         }
         if (Regex("כמה זמן.*(שבת|נרות)").containsMatchIn(s)) return Cmd.ShabbatNow
 
-        Regex("""^שמור\s+(?:את\s+)?(?:המקום|המיקום)(?:\s+הנוכחי)?(?:\s+בשם|\s+כ|\s+בתור)?\s*(.+)$""").find(s)?.let {
+        Regex("""^(?:שמור|תשמור)\s+(?:את\s+)?(?:המקום|המיקום)(?:\s+הנוכחי)?(?:\s+בשם|\s+כ|\s+בתור)?\s*(.+)$""").find(s)?.let {
             return Cmd.SavePlace(it.groupValues[1].trim())
         }
 
@@ -159,9 +174,6 @@ object Parser {
             }
             return Cmd.Unknown(s)
         }
-
-        Regex("""^(?:תזכיר לי|תזכירי לי|הזכר לי)\s+(.+?)\s+כש(?:אגיע|אני מגיע|אהיה|אני אגיע)\s+(?:ל|אל\s+|ב)?(.+)$""")
-            .find(s)?.let { return Cmd.GeoRemind(it.groupValues[1].trim(), it.groupValues[2].trim()) }
 
         if (Regex("^(?:מה יש לי|מה האירועים|מה ביומן|מה יש ביומן)").containsMatchIn(s))
             return Cmd.ShowEvents(if (s.contains("מחר")) 1 else 0)
@@ -180,5 +192,74 @@ object Parser {
         }
 
         return Cmd.Unknown(s)
+    }
+
+    private val TRIG = Regex("""(?:כש|כאשר |ברגע ש|כשאני )(?:אגיע|מגיע|אני מגיע|אני אגיע|אהיה|אכנס|נכנס|אני נכנס|אגיע)\s*""")
+    private val CMDWORDS = Regex(
+        """(?<![א-ת])(?:תזכיר|תזכירי|הזכר|תשלח|שלח|תשלחי|תעשה|תעשי|תן|תיתן|תרשום)\s+לי(?:\s+(?:תזכורת|הודעה|התראה))?(?:\s+(?:על|ש))?"""
+    )
+
+    private fun parseGeo(s: String, places: List<String>): Cmd? {
+        val m = TRIG.find(s) ?: return null
+        val before = s.substring(0, m.range.first)
+        val raw = s.substring(m.range.last + 1).trim()
+        val stripped = raw.replace(Regex("^(?:לתוך\\s+|אל\\s+|ל|ב)"), "")
+        fun nz(x: String) = x.trim().removePrefix("ה")
+        var place: String? = null
+        var restAfter = stripped
+        var after = stripped
+        loop@ for (p in places.sortedByDescending { it.length }) {
+            for (cand in listOf(stripped, raw)) {
+                val a = nz(cand)
+                if (a.startsWith(nz(p))) {
+                    place = p
+                    restAfter = a.removePrefix(nz(p)).trim()
+                    break@loop
+                }
+            }
+        }
+        if (place == null) {
+            val stop = Regex("""\s+(?:תזכיר|תזכירי|הזכר|תשלח|שלח|תשלחי|תעשה|תן)\s""").find(after)
+            val chunk = if (stop != null) after.substring(0, stop.range.first) else after
+            val words = chunk.split(" ").filter { it.isNotBlank() }
+            if (words.isEmpty()) return null
+            place = words.first().let { if (it == "הביתה") "בית" else it }
+            restAfter = if (stop != null) after.substring(stop.range.first) else words.drop(1).joinToString(" ")
+        }
+        restAfter = restAfter.replace(Regex("^ה(?=\\s|$)"), "").trim()
+        var text = CMDWORDS.replace("$before $restAfter", " ").replace(Regex("\\s+"), " ").trim()
+        text = text.replace(Regex("^(?:על|ש)\\s+"), "")
+        return Cmd.GeoRemind(text, place ?: return null)
+    }
+}
+
+/** ממיר מספרים במילים ("עשרים וחמש") לספרות, כדי שזיהוי הדיבור יובן גם בלי ספרות. */
+object Num {
+    private val W = mapOf(
+        "אחד" to 1, "אחת" to 1, "שניים" to 2, "שתיים" to 2, "שני" to 2, "שתי" to 2, "שתים" to 2,
+        "שלוש" to 3, "שלושה" to 3, "ארבע" to 4, "ארבעה" to 4, "חמש" to 5, "חמישה" to 5,
+        "שש" to 6, "שישה" to 6, "שבע" to 7, "שבעה" to 7, "שמונה" to 8, "תשע" to 9, "תשעה" to 9,
+        "עשר" to 10, "עשרה" to 10, "עשרים" to 20, "שלושים" to 30, "ארבעים" to 40,
+        "חמישים" to 50, "שישים" to 60, "שבעים" to 70, "שמונים" to 80, "תשעים" to 90
+    )
+
+    private fun value(tok: String, inRun: Boolean): Int? {
+        W[tok]?.let { return it }
+        if (inRun && tok.length > 2 && tok.startsWith("ו")) return W[tok.substring(1)]
+        return null
+    }
+
+    fun convert(s: String): String {
+        val toks = s.split(" ")
+        val out = mutableListOf<String>()
+        var acc = 0
+        var inRun = false
+        fun flush() { if (inRun) { out.add(acc.toString()); acc = 0; inRun = false } }
+        for (t in toks) {
+            val v = value(t, inRun)
+            if (v != null) { acc += v; inRun = true } else { flush(); out.add(t) }
+        }
+        flush()
+        return out.joinToString(" ")
     }
 }

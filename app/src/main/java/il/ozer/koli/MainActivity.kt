@@ -119,7 +119,7 @@ class MainActivity : ComponentActivity(), Ui {
     // ---------- Ui ----------
     private fun say(text: String, then: (() -> Unit)?) {
         runOnUiThread { state.log.add("עוזר: $text") }
-        tts.speak(text, then)
+        if (Store.bool(this, "speak_on")) tts.speak(text, then) else then?.invoke()
     }
 
     override fun say(text: String) = say(text, null)

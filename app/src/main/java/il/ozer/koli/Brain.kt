@@ -21,21 +21,22 @@ interface Ui {
 }
 
 class Brain(private val c: Context, private val ui: Ui) {
-    /** תזכורת או אירוע שחסרה להם שעה: ממתינים לתשובה. */
-    private var awaiting: Pair<String, String>? = null // kind to title
+    /** כשחסר פרט (שעה, תוכן הודעה...) ממתינים למשפט הבא ומעבירים אותו לפונקציה הזו. */
+    private var next: ((String) -> Unit)? = null
 
     private fun has(p: String) = ContextCompat.checkSelfPermission(c, p) == PackageManager.PERMISSION_GRANTED
 
     fun handle(raw: String) {
-        val pending = awaiting
-        if (pending != null) {
-            awaiting = null
+        val n = next
+        if (n != null) { next = null; n(raw); return }
+        run(Parser.parse(raw, Store.places(c).map { it.name }))
+    }
+
+    private fun askTime(kind: String, title: String) {
+        next = { raw ->
             val w = Parser.parseWhen(Parser.normalize(raw))
-            if (w != null) { addItem(pending.first, pending.second, w.ms); return }
-            ui.say("לא הבנתי את השעה, ביטלתי.")
-            return
+            if (w != null) addItem(kind, title, w.ms) else ui.say("לא הבנתי את השעה, ביטלתי.")
         }
-        run(Parser.parse(raw))
     }
 
     fun run(cmd: Cmd) {
@@ -58,13 +59,14 @@ class Brain(private val c: Context, private val ui: Ui) {
             }
             is Cmd.Remind -> {
                 if (cmd.timeMs != null) addItem("reminder", cmd.text, cmd.timeMs)
-                else { awaiting = "reminder" to cmd.text; ui.say("מתי להזכיר לך?") }
+                else { askTime("reminder", cmd.text); ui.say("מתי להזכיר לך?") }
             }
             is Cmd.AddEvent -> {
                 if (cmd.timeMs != null) addItem("event", cmd.title, cmd.timeMs)
-                else { awaiting = "event" to cmd.title; ui.say("מתי האירוע?") }
+                else { askTime("event", cmd.title); ui.say("מתי האירוע?") }
             }
             is Cmd.GeoRemind -> geoRemind(cmd)
+            is Cmd.Message -> message(cmd)
             is Cmd.SavePlace -> savePlace(cmd.name)
             is Cmd.ShowEvents -> showEvents(cmd.dayOffset)
             is Cmd.CandleTime -> {
@@ -78,7 +80,7 @@ class Brain(private val c: Context, private val ui: Ui) {
                 val left = ((Shabbat.nextCandle(c) - System.currentTimeMillis()) / 1000).toInt()
                 ui.say("עד הדלקת נרות נשארו " + spoken(left))
             }
-            is Cmd.Unknown -> ui.say("לא הבנתי: ${cmd.raw}")
+            is Cmd.Unknown -> ui.say("לא הבנתי: ${cmd.raw}. נסה: תתקשר ל..., תשלח הודעה ל..., תזכיר לי ... כשאגיע ל..., טיימר 10 דקות")
         }
     }
 
@@ -89,20 +91,64 @@ class Brain(private val c: Context, private val ui: Ui) {
             return
         }
         val found = Contacts.find(c, name).ifEmpty { Contacts.find(c, "ל$name") }
-        when {
-            found.isEmpty() -> ui.say("לא מצאתי איש קשר בשם $name")
-            found.size == 1 -> askCall(found[0])
-            else -> ui.choose("מצאתי כמה אפשרויות. את מי לבחור?", found.map { "${it.name} (${it.number})" }) { askCall(found[it]) }
+        if (found.isEmpty()) { ui.say("לא מצאתי איש קשר בשם $name"); return }
+        // לחיצה על השם היא האישור: שום חיוג לא מתבצע בלי שתלחץ
+        ui.choose("לחץ על השם כדי להתקשר", found.map { "${it.name} (${it.number})" }) { dial(found[it]) }
+    }
+
+    private fun dial(ct: Contact) {
+        val uri = Uri.parse("tel:" + Uri.encode(ct.number))
+        val intent = if (has(Manifest.permission.CALL_PHONE)) Intent(Intent.ACTION_CALL, uri) else Intent(Intent.ACTION_DIAL, uri)
+        try { c.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        catch (e: Exception) { ui.say("לא הצלחתי לחייג.") }
+    }
+
+    // ---------- שליחת הודעה ----------
+    private fun message(cmd: Cmd.Message) {
+        if (!Contacts.granted(c)) {
+            ui.requestPerms(arrayOf(Manifest.permission.READ_CONTACTS)) { message(cmd) }
+            return
+        }
+        var tokens = cmd.rest.split(" ").filter { it.isNotBlank() }
+        if (tokens.firstOrNull() == "אל") tokens = tokens.drop(1)
+        if (tokens.isEmpty()) { ui.say("למי לשלוח הודעה?"); return }
+        for (k in minOf(3, tokens.size) downTo 1) {
+            val raw = tokens.take(k).joinToString(" ")
+            val names = listOf(raw.removePrefix("ל"), raw).distinct()
+            val found = names.firstNotNullOfOrNull { n -> Contacts.find(c, n).ifEmpty { null } } ?: continue
+            var body = tokens.drop(k).joinToString(" ")
+            body = body.replace(Regex("^ש(?=(?:אני|אנחנו|אתה|את|הוא|היא|הם|הן|אגיע|אאחר)(?![א-ת]))"), "")
+            if (body.isBlank()) {
+                next = { text -> chooseSend(found, Parser.normalize(text), cmd.whatsapp) }
+                ui.say("מה לכתוב בהודעה?")
+            } else chooseSend(found, body, cmd.whatsapp)
+            return
+        }
+        ui.say("לא מצאתי איש קשר: ${tokens.first().removePrefix("ל")}")
+    }
+
+    private fun chooseSend(found: List<Contact>, body: String, wa: Boolean?) {
+        val opts = mutableListOf<Triple<Contact, Boolean, String>>()
+        found.forEach { ct ->
+            if (wa != true) opts.add(Triple(ct, false, "${ct.name} - הודעת SMS"))
+            if (wa != false) opts.add(Triple(ct, true, "${ct.name} - וואטסאפ"))
+        }
+        ui.choose("ההודעה: \"$body\". לחץ על השם כדי לפתוח אותה לשליחה", opts.map { it.third }) { i ->
+            val (ct, viaWa, _) = opts[i]
+            sendMessage(ct, body, viaWa)
         }
     }
 
-    private fun askCall(ct: Contact) {
-        ui.confirm("להתקשר ל${ct.name}?") {
-            val uri = Uri.parse("tel:" + Uri.encode(ct.number))
-            val intent = if (has(Manifest.permission.CALL_PHONE)) Intent(Intent.ACTION_CALL, uri) else Intent(Intent.ACTION_DIAL, uri)
-            try { c.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-            catch (e: Exception) { ui.say("לא הצלחתי לחייג.") }
+    private fun sendMessage(ct: Contact, body: String, viaWa: Boolean) {
+        val intent = if (viaWa) {
+            var d = ct.number.filter { it.isDigit() || it == '+' }
+            d = if (d.startsWith("+")) d.drop(1) else if (d.startsWith("0")) "972" + d.drop(1) else d
+            Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$d?text=" + Uri.encode(body)))
+        } else {
+            Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + Uri.encode(ct.number))).putExtra("sms_body", body)
         }
+        try { c.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        catch (e: Exception) { ui.say("לא הצלחתי לפתוח את אפליקציית ההודעות.") }
     }
 
     // ---------- תזכורות ויומן ----------
@@ -142,21 +188,63 @@ class Brain(private val c: Context, private val ui: Ui) {
     }
 
     private fun geoRemind(cmd: Cmd.GeoRemind) {
-        val place = Store.places(c).firstOrNull { norm(it.name) == norm(cmd.place) }
-        if (place == null) {
-            ui.say("המקום ${cmd.place} עדיין לא שמור. כשתגיע אליו אמור: שמור מקום ${cmd.place}")
+        if (cmd.text.isBlank()) {
+            next = { t -> geoRemind(cmd.copy(text = Parser.normalize(t))) }
+            ui.say("מה להזכיר לך כשתגיע ל${cmd.place}?")
             return
         }
+        val place = Store.places(c).firstOrNull { norm(it.name) == norm(cmd.place) }
+        if (place == null) { unknownPlace(cmd); return }
         if (!Geo.hasFine(c)) {
             ui.requestPerms(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)) { geoRemind(cmd) }
             return
         }
         if (!Geo.hasBackground(c)) {
-            ui.say("כדי שזה יעבוד כשהאפליקציה סגורה, צריך לאשר מיקום 'תמיד' בהגדרות האפליקציה (מסך בדיקת תקלות).")
+            ui.say("כדי שזה יעבוד כשהאפליקציה סגורה, צריך לאשר מיקום 'תמיד' (הגדרות > בדיקת תקלות > מיקום 'תמיד').")
         }
         Store.saveGeos(c, Store.geos(c) + GeoRem(Store.nextId(c), cmd.text, place.name))
         Geo.registerAll(c)
         ui.say("אזכיר לך ${cmd.text} כשתגיע ל${place.name}")
+    }
+
+    /** המקום עדיין לא שמור: מציעים לשמור את המיקום הנוכחי או לחפש לפי שם. */
+    private fun unknownPlace(cmd: Cmd.GeoRemind) {
+        ui.choose("המקום \"${cmd.place}\" עדיין לא שמור. מה לעשות?",
+            listOf("אני נמצא שם עכשיו: שמור את המיקום", "חפש את המקום לפי שם (דורש אינטרנט)", "ביטול")) { i ->
+            when (i) {
+                0 -> {
+                    if (!Geo.hasFine(c)) {
+                        ui.requestPerms(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)) { unknownPlace(cmd) }
+                    } else {
+                        ui.say("שומר את המיקום הנוכחי...")
+                        Geo.saveCurrentPlace(c, cmd.place) { ok ->
+                            if (ok) geoRemind(cmd) else ui.say("לא הצלחתי לקבל מיקום. נסה שוב בחוץ.")
+                        }
+                    }
+                }
+                1 -> searchPlace(cmd)
+                else -> ui.say("ביטלתי.")
+            }
+        }
+    }
+
+    private fun searchPlace(cmd: Cmd.GeoRemind) {
+        ui.say("מחפש את ${cmd.place}...")
+        Thread {
+            try {
+                @Suppress("DEPRECATION")
+                val res = android.location.Geocoder(c, Locale("he", "IL")).getFromLocationName(cmd.place, 3)
+                if (res.isNullOrEmpty()) { ui.say("לא מצאתי את ${cmd.place}. עדיף לשמור כשאתה שם."); return@Thread }
+                val labels = res.map { it.getAddressLine(0) ?: cmd.place }
+                ui.choose("מצאתי. לחץ על המקום הנכון", labels) { i ->
+                    val r = res[i]
+                    Store.savePlaces(c, Store.places(c).filter { it.name != cmd.place } + Place(cmd.place, r.latitude, r.longitude))
+                    geoRemind(cmd)
+                }
+            } catch (e: Exception) {
+                ui.say("החיפוש נכשל (אין אינטרנט?). עדיף לשמור את המקום כשאתה שם.")
+            }
+        }.start()
     }
 
     companion object {

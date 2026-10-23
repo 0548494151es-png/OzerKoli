@@ -96,7 +96,7 @@ fun AssistantScreen(a: MainActivity) {
             }
         }
         Text(
-            if (s.listening) "מקשיב..." else "לחץ ודבר. למשל: תתקשר לאמא, טיימר 10 דקות, תזכיר לי מחר ב-8 לקנות חלב",
+            if (s.listening) "מקשיב..." else "לחץ ודבר. למשל: תתקשר לאמא, תשלח הודעה לדני שאני מגיע, טיימר 10 דקות, תזכיר לי לקנות חלב כשאגיע לסופר",
             Modifier.fillMaxWidth().padding(top = 8.dp), style = MaterialTheme.typography.bodySmall
         )
     }

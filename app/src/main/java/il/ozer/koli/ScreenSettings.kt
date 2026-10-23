@@ -23,6 +23,7 @@ fun SettingsScreen(a: MainActivity) {
     val tick = a.state.tick
     var v by remember { mutableStateOf(0) }
     val teacher = remember(v) { Store.bool(a, "teacher") }
+    val speakOn = remember(v) { Store.bool(a, "speak_on") }
 
     fun granted(p: String) = a.checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED
     fun ask(vararg p: String) = a.requestPerms(arrayOf(*p)) { v++ }
@@ -60,6 +61,13 @@ fun SettingsScreen(a: MainActivity) {
                     else Store.lessons(a).forEach { l -> Scheduler.cancel(a, l.id, "lesson") }
                     v++; a.state.tick++
                 })
+            }
+            Row(Modifier.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("הקראה בקול של תשובות")
+                    Text("כבוי: התשובות מופיעות רק בכתב", style = MaterialTheme.typography.bodySmall)
+                }
+                Switch(speakOn, { Store.setBool(a, "speak_on", it); v++ })
             }
             OutlinedButton(onClick = { a.startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS)) }, Modifier.fillMaxWidth()) {
                 Text("הגדר כעוזר הדיגיטלי של המכשיר (הפעלה בלחיצה ארוכה)")
