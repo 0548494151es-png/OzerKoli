@@ -38,6 +38,13 @@ fun SettingsScreen(a: MainActivity) {
             add(Check1("הקראה בעברית (TTS)", ttsReady && ttsHe, "הגדרות > ניהול כללי > טקסט לדיבור > הורד עברית", null))
             add(Check1("אנשי קשר", granted(Manifest.permission.READ_CONTACTS), "נדרש לחיפוש מי להתקשר") { ask(Manifest.permission.READ_CONTACTS) })
             add(Check1("חיוג", granted(Manifest.permission.CALL_PHONE), "בלי זה ייפתח החייגן ותלחץ חיוג ידנית") { ask(Manifest.permission.CALL_PHONE) })
+            val pmgr = a.packageManager
+            add(Check1("שעון מעורר של המערכת",
+                Intent(android.provider.AlarmClock.ACTION_SET_ALARM).resolveActivity(pmgr) != null,
+                "אפליקציית השעון לא מגיבה לבקשות. קבע שעון ידנית", null))
+            add(Check1("טיימר של המערכת",
+                Intent(android.provider.AlarmClock.ACTION_SET_TIMER).resolveActivity(pmgr) != null,
+                "אפליקציית השעון לא מגיבה. ייעשה שימוש בטיימר פנימי", null))
             add(Check1("התראות", Build.VERSION.SDK_INT < 33 || granted(Manifest.permission.POST_NOTIFICATIONS), "בלי זה לא יופיעו תזכורות") { ask(Manifest.permission.POST_NOTIFICATIONS) })
             add(Check1("התראות מדויקות", Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms(), "אחרת תזכורות עלולות להתאחר") {
                 a.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${a.packageName}")))

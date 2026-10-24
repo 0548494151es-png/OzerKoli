@@ -6,6 +6,9 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Handler
+import android.os.Looper
+import java.util.Locale
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingRequest
@@ -32,13 +35,13 @@ object Geo {
         client.removeGeofences(pi(c))
         if (!hasFine(c)) return
         val places = Store.places(c)
-        val fences = Store.geos(c).mapNotNull { g ->
+        val fences = Store.geos(c).filter { it.on }.mapNotNull { g ->
             val p = places.firstOrNull { it.name == g.place } ?: return@mapNotNull null
             Geofence.Builder()
                 .setRequestId("g${g.id}")
                 .setCircularRegion(p.lat, p.lng, 150f)
                 .setExpirationDuration(Geofence.NEVER_EXPIRE)
-                .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER)
+                .setTransitionTypes(if (g.leave) Geofence.GEOFENCE_TRANSITION_EXIT else Geofence.GEOFENCE_TRANSITION_ENTER)
                 .build()
         }
         if (fences.isEmpty()) return
@@ -64,5 +67,18 @@ object Geo {
                 done(true)
             }
             .addOnFailureListener { done(false) }
+    }
+
+    /** חיפוש כתובת או שם מקום (דורש אינטרנט). התוצאה חוזרת בשרשור הראשי. */
+    fun search(c: Context, query: String, cb: (List<Triple<String, Double, Double>>) -> Unit) {
+        val h = Handler(Looper.getMainLooper())
+        Thread {
+            val out = try {
+                @Suppress("DEPRECATION")
+                android.location.Geocoder(c, Locale("he", "IL")).getFromLocationName(query, 4)
+                    ?.map { Triple(it.getAddressLine(0) ?: query, it.latitude, it.longitude) } ?: emptyList()
+            } catch (e: Exception) { emptyList() }
+            h.post { cb(out) }
+        }.start()
     }
 }

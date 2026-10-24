@@ -38,7 +38,6 @@ fun RemindersScreen(a: MainActivity) {
     var title by remember { mutableStateOf("") }
     var isEvent by remember { mutableStateOf(false) }
     val list = remember(tick, local) { Store.items(a).sortedBy { it.timeMs } }
-    val geos = remember(tick, local) { Store.geos(a) }
     val f = remember { SimpleDateFormat("EEEE dd/MM HH:mm", Locale("he", "IL")) }
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
@@ -62,22 +61,8 @@ fun RemindersScreen(a: MainActivity) {
                 )
                 HorizontalDivider()
             }
-            items(geos) { g ->
-                ListItem(
-                    headlineContent = { Text(g.text) },
-                    supportingContent = { Text("כשאגיע ל${g.place}") },
-                    trailingContent = {
-                        IconButton(onClick = {
-                            Store.saveGeos(a, Store.geos(a).filter { x -> x.id != g.id })
-                            Geo.registerAll(a); local++
-                        }) { Icon(Icons.Filled.Delete, "מחק") }
-                    }
-                )
-                HorizontalDivider()
-            }
         }
-        Text("אפשר גם בקול: תזכיר לי לקנות חלב כשאגיע לסופר. (קודם: שמור מקום סופר, כשאתה שם)",
-            style = MaterialTheme.typography.bodySmall)
+        Text("תזכורות לפי מקום נמצאות בלשונית \"מקומות\".", style = MaterialTheme.typography.bodySmall)
     }
 
     if (showAdd) {

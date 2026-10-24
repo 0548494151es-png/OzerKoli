@@ -43,29 +43,35 @@ class Brain(private val c: Context, private val ui: Ui) {
         when (cmd) {
             is Cmd.Call -> call(cmd.name)
             is Cmd.SetAlarm -> {
+                // פותח את אפליקציית השעון עם השעה מוכנה. בלי SKIP_UI, כי בחלק מהמכשירים (למשל שיאומי) זה נתקע בשקט.
                 val i = Intent(AlarmClock.ACTION_SET_ALARM)
                     .putExtra(AlarmClock.EXTRA_HOUR, cmd.hour)
                     .putExtra(AlarmClock.EXTRA_MINUTES, cmd.min)
-                    .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
+                    .putExtra(AlarmClock.EXTRA_MESSAGE, "עוזר קולי")
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                val hhmm = String.format(Locale.US, "%02d:%02d", cmd.hour, cmd.min)
                 try {
                     c.startActivity(i)
-                    ui.say("קבעתי שעון מעורר ל-" + String.format(Locale.US, "%02d:%02d", cmd.hour, cmd.min))
-                } catch (e: Exception) { ui.say("לא הצלחתי לקבוע שעון מעורר באפליקציית השעון.") }
+                    ui.say("פתחתי את השעון עם שעון מעורר ל-$hhmm. אם צריך, אשר שם.")
+                } catch (e: Exception) {
+                    ui.say("השעון של הטלפון לא הגיב (${e.javaClass.simpleName}). קבע ידנית ל-$hhmm.")
+                }
             }
             is Cmd.SetTimer -> {
-                // קודם כל: טיימר אמיתי באפליקציית השעון של המכשיר. אם אי אפשר, טיימר פנימי.
                 val i = Intent(AlarmClock.ACTION_SET_TIMER)
                     .putExtra(AlarmClock.EXTRA_LENGTH, cmd.seconds)
                     .putExtra(AlarmClock.EXTRA_MESSAGE, "טיימר")
-                    .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                var ok = false
                 if (cmd.seconds in 1..86400) {
-                    try { c.startActivity(i); ok = true } catch (e: Exception) { ok = false }
+                    try {
+                        c.startActivity(i)
+                        ui.say("פתחתי את השעון עם טיימר ל" + spoken(cmd.seconds) + ". אם צריך, לחץ שם התחל.")
+                        return
+                    } catch (e: Exception) {
+                        ui.say("השעון לא הגיב (${e.javaClass.simpleName}), הפעלתי טיימר פנימי.")
+                    }
                 }
-                if (!ok) Scheduler.startTimer(c, cmd.seconds, "טיימר")
-                ui.say((if (ok) "קבעתי טיימר בשעון: " else "הטיימר התחיל: ") + spoken(cmd.seconds))
+                Scheduler.startTimer(c, cmd.seconds, "טיימר")
             }
             is Cmd.Remind -> {
                 if (cmd.timeMs != null) addItem("reminder", cmd.text, cmd.timeMs)
@@ -77,7 +83,7 @@ class Brain(private val c: Context, private val ui: Ui) {
             }
             is Cmd.GeoRemind -> geoRemind(cmd)
             is Cmd.Message -> message(cmd)
-            is Cmd.SavePlace -> savePlace(cmd.name)
+            is Cmd.SavePlace -> if (cmd.address != null) geocode(cmd.name, cmd.address) { ui.say("שמרתי את המקום ${cmd.name}") } else savePlace(cmd.name)
             is Cmd.ShowEvents -> showEvents(cmd.dayOffset)
             is Cmd.CandleTime -> {
                 Store.setInt(c, "candle_h", cmd.hour); Store.setInt(c, "candle_m", cmd.min)
@@ -212,9 +218,10 @@ class Brain(private val c: Context, private val ui: Ui) {
         if (!Geo.hasBackground(c)) {
             ui.say("כדי שזה יעבוד כשהאפליקציה סגורה, צריך לאשר מיקום 'תמיד' (הגדרות > בדיקת תקלות > מיקום 'תמיד').")
         }
-        Store.saveGeos(c, Store.geos(c) + GeoRem(Store.nextId(c), cmd.text, place.name))
+        Store.saveGeos(c, Store.geos(c) + GeoRem(Store.nextId(c), cmd.text, place.name, cmd.leave, cmd.always))
         Geo.registerAll(c)
-        ui.say("אזכיר לך ${cmd.text} כשתגיע ל${place.name}")
+        val when_ = if (cmd.leave) "כשתצא מ${place.name}" else "כשתגיע ל${place.name}"
+        ui.say("אזכיר לך ${cmd.text} $when_" + if (cmd.always) " (בכל פעם)" else "")
     }
 
     /** המקום עדיין לא שמור: מציעים לשמור את המיקום הנוכחי או לחפש לפי שם. */
@@ -238,18 +245,22 @@ class Brain(private val c: Context, private val ui: Ui) {
         }
     }
 
-    private fun searchPlace(cmd: Cmd.GeoRemind) {
-        ui.say("מחפש את ${cmd.place}...")
+    private fun searchPlace(cmd: Cmd.GeoRemind) = geocode(cmd.place, cmd.place) { geoRemind(cmd) }
+
+    /** מחפש כתובת או שם מקום (דורש אינטרנט), נותן לבחור תוצאה בלחיצה, שומר ואז ממשיך. */
+    fun geocode(name: String, address: String, then: () -> Unit) {
+        ui.say("מחפש את $address...")
         Thread {
             try {
                 @Suppress("DEPRECATION")
-                val res = android.location.Geocoder(c, Locale("he", "IL")).getFromLocationName(cmd.place, 3)
-                if (res.isNullOrEmpty()) { ui.say("לא מצאתי את ${cmd.place}. עדיף לשמור כשאתה שם."); return@Thread }
-                val labels = res.map { it.getAddressLine(0) ?: cmd.place }
+                val res = android.location.Geocoder(c, Locale("he", "IL")).getFromLocationName(address, 3)
+                if (res.isNullOrEmpty()) { ui.say("לא מצאתי את $address. נסה כתובת מלאה יותר, או שמור כשאתה שם."); return@Thread }
+                val labels = res.map { it.getAddressLine(0) ?: address }
                 ui.choose("מצאתי. לחץ על המקום הנכון", labels) { i ->
                     val r = res[i]
-                    Store.savePlaces(c, Store.places(c).filter { it.name != cmd.place } + Place(cmd.place, r.latitude, r.longitude))
-                    geoRemind(cmd)
+                    Store.savePlaces(c, Store.places(c).filter { it.name != name } + Place(name, r.latitude, r.longitude))
+                    Geo.registerAll(c)
+                    then()
                 }
             } catch (e: Exception) {
                 ui.say("החיפוש נכשל (אין אינטרנט?). עדיף לשמור את המקום כשאתה שם.")

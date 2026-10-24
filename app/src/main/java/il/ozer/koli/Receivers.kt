@@ -53,13 +53,21 @@ class BootReceiver : BroadcastReceiver() {
 class GeoReceiver : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
         val ev = GeofencingEvent.fromIntent(i) ?: return
-        if (ev.hasError() || ev.geofenceTransition != Geofence.GEOFENCE_TRANSITION_ENTER) return
+        if (ev.hasError()) return
+        val t = ev.geofenceTransition
+        if (t != Geofence.GEOFENCE_TRANSITION_ENTER && t != Geofence.GEOFENCE_TRANSITION_EXIT) return
         val ids = ev.triggeringGeofences?.map { it.requestId } ?: return
         val geos = Store.geos(c)
-        geos.filter { ids.contains("g${it.id}") }.forEach {
-            Notif.alert(c, it.id, "תזכורת מיקום: ${it.place}", it.text)
+        val fired = geos.filter { ids.contains("g${it.id}") && it.on && it.leave == (t == Geofence.GEOFENCE_TRANSITION_EXIT) }
+        fired.forEach {
+            val head = if (it.leave) "יצאת מ${it.place}" else "הגעת ל${it.place}"
+            Notif.alert(c, it.id, head, it.text)
         }
-        // התזכורת חד-פעמית: מסירים אותה אחרי שהופעלה
-        Store.saveGeos(c, geos.filter { g -> !ids.contains("g${g.id}") })
+        // תזכורת "פעם אחת" נמחקת אחרי שהופעלה; "בכל פעם" נשארת
+        val remove = fired.filter { !it.always }.map { it.id }
+        if (remove.isNotEmpty()) {
+            Store.saveGeos(c, geos.filter { g -> !remove.contains(g.id) })
+            Geo.registerAll(c)
+        }
     }
 }

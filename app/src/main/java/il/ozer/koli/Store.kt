@@ -6,7 +6,7 @@ import org.json.JSONObject
 
 data class Item(val id: Int, val title: String, val timeMs: Long, val kind: String, val repeat: String)
 data class Place(val name: String, val lat: Double, val lng: Double)
-data class GeoRem(val id: Int, val text: String, val place: String)
+data class GeoRem(val id: Int, val text: String, val place: String, val leave: Boolean = false, val always: Boolean = false, val on: Boolean = true)
 data class Lesson(val id: Int, val title: String, val dow: Int, val hour: Int, val min: Int, val before: Int)
 data class Check(val id: Int, val title: String, val total: Int, val done: Int)
 
@@ -48,9 +48,11 @@ object Store {
     fun savePlaces(c: Context, l: List<Place>) = save(c, "places", l) {
         JSONObject().put("n", it.name).put("la", it.lat).put("lo", it.lng)
     }
-    fun geos(c: Context) = load(c, "geos") { GeoRem(it.getInt("id"), it.getString("t"), it.getString("p")) }
+    fun geos(c: Context) = load(c, "geos") {
+        GeoRem(it.getInt("id"), it.getString("t"), it.getString("p"), it.optBoolean("lv", false), it.optBoolean("al", false), it.optBoolean("on", true))
+    }
     fun saveGeos(c: Context, l: List<GeoRem>) = save(c, "geos", l) {
-        JSONObject().put("id", it.id).put("t", it.text).put("p", it.place)
+        JSONObject().put("id", it.id).put("t", it.text).put("p", it.place).put("lv", it.leave).put("al", it.always).put("on", it.on)
     }
 
     // ---- מצב מורה ----

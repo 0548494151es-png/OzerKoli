@@ -23,6 +23,7 @@ fun AppUi(a: MainActivity) {
             val tabs = buildList {
                 add("עוזר" to Icons.Filled.Mic)
                 add("תזכורות" to Icons.Filled.Notifications)
+                add("מקומות" to Icons.Filled.Place)
                 add("שבת" to Icons.Filled.Timer)
                 if (teacher) add("מורה" to Icons.Filled.School)
                 add("הגדרות" to Icons.Filled.Settings)
@@ -44,6 +45,7 @@ fun AppUi(a: MainActivity) {
                     when (tabs[tab].first) {
                         "עוזר" -> AssistantScreen(a)
                         "תזכורות" -> RemindersScreen(a)
+                        "מקומות" -> PlacesScreen(a)
                         "שבת" -> ShabbatScreen(a)
                         "מורה" -> TeacherScreen(a)
                         else -> SettingsScreen(a)
@@ -59,6 +61,11 @@ fun AssistantScreen(a: MainActivity) {
     val s = a.state
     var typed by remember { mutableStateOf("") }
     Column(Modifier.fillMaxSize().padding(16.dp)) {
+        if (s.log.isNotEmpty() || s.confirm != null || s.choice != null) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = { s.log.clear(); s.confirm = null; s.choice = null }) { Text("נקה") }
+            }
+        }
         LazyColumn(Modifier.weight(1f), reverseLayout = true) {
             items(s.log.reversed()) { line ->
                 Text(line, Modifier.padding(vertical = 4.dp),

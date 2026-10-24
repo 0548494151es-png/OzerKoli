@@ -7,10 +7,10 @@ sealed class Cmd {
     data class SetAlarm(val hour: Int, val min: Int) : Cmd()
     data class SetTimer(val seconds: Int) : Cmd()
     data class Remind(val text: String, val timeMs: Long?) : Cmd()
-    data class GeoRemind(val text: String, val place: String) : Cmd()
+    data class GeoRemind(val text: String, val place: String, val leave: Boolean = false, val always: Boolean = false) : Cmd()
     data class Message(val rest: String, val whatsapp: Boolean?) : Cmd()
     data class AddEvent(val title: String, val timeMs: Long?) : Cmd()
-    data class SavePlace(val name: String) : Cmd()
+    data class SavePlace(val name: String, val address: String? = null) : Cmd()
     data class ShowEvents(val dayOffset: Int) : Cmd()
     data class CandleTime(val hour: Int, val min: Int) : Cmd()
     object ShabbatNow : Cmd()
@@ -162,7 +162,11 @@ object Parser {
         }
         if (Regex("כמה זמן.*(שבת|נרות)").containsMatchIn(s)) return Cmd.ShabbatNow
 
-        Regex("""^(?:שמור|תשמור)\s+(?:את\s+)?(?:המקום|המיקום)(?:\s+הנוכחי)?(?:\s+בשם|\s+כ|\s+בתור)?\s*(.+)$""").find(s)?.let {
+        Regex("""^(?:שמור|תשמור)\s+(?:את\s+)?(?:ה?מקום\s+|ה?מיקום\s+)?(.+?)\s+(?:בכתובת|ב-כתובת|כתובת)\s+(.+)$""").find(s)?.let {
+            return Cmd.SavePlace(it.groupValues[1].trim(), it.groupValues[2].trim())
+        }
+
+        Regex("""^(?:שמור|תשמור)\s+(?:את\s+)?(?:ה?מקום|ה?מיקום)(?:\s+הנוכחי)?(?:\s+בשם|\s+כ|\s+בתור)?\s*(.+)$""").find(s)?.let {
             return Cmd.SavePlace(it.groupValues[1].trim())
         }
 
@@ -194,16 +198,22 @@ object Parser {
         return Cmd.Unknown(s)
     }
 
-    private val TRIG = Regex("""(?:כש|כאשר |ברגע ש|כשאני )(?:אגיע|מגיע|אני מגיע|אני אגיע|אהיה|אכנס|נכנס|אני נכנס|אגיע)\s*""")
+    private val TRIG = Regex("""(?:כש|כאשר |ברגע ש|כשאני )(?:אגיע|מגיע|אני מגיע|אני אגיע|אהיה|אכנס|נכנס|אני נכנס)\s*""")
+    private val TRIG_LEAVE = Regex("""(?:כש|כאשר |ברגע ש|כשאני )(?:אצא|אעזוב|יוצא|עוזב|אני יוצא|אני עוזב|אני אצא|אני אעזוב)\s*""")
+    private val ALWAYS = Regex("""(?<![א-ת])(?:בכל פעם|כל פעם|תמיד)(?![א-ת])""")
     private val CMDWORDS = Regex(
         """(?<![א-ת])(?:תזכיר|תזכירי|הזכר|תשלח|שלח|תשלחי|תעשה|תעשי|תן|תיתן|תרשום)\s+לי(?:\s+(?:תזכורת|הודעה|התראה))?(?:\s+(?:על|ש))?"""
     )
 
-    private fun parseGeo(s: String, places: List<String>): Cmd? {
-        val m = TRIG.find(s) ?: return null
+    private fun parseGeo(s0: String, places: List<String>): Cmd? {
+        val always = ALWAYS.containsMatchIn(s0)
+        val s = ALWAYS.replace(s0, " ").replace(Regex("\\s+"), " ").trim()
+        val mLeave = TRIG_LEAVE.find(s)
+        val leave = mLeave != null
+        val m = mLeave ?: TRIG.find(s) ?: return null
         val before = s.substring(0, m.range.first)
         val raw = s.substring(m.range.last + 1).trim()
-        val stripped = raw.replace(Regex("^(?:לתוך\\s+|אל\\s+|ל|ב)"), "")
+        val stripped = raw.replace(Regex(if (leave) "^(?:מן\\s+|מ)" else "^(?:לתוך\\s+|אל\\s+|ל|ב)"), "")
         fun nz(x: String) = x.trim().removePrefix("ה")
         var place: String? = null
         var restAfter = stripped
@@ -229,7 +239,7 @@ object Parser {
         restAfter = restAfter.replace(Regex("^ה(?=\\s|$)"), "").trim()
         var text = CMDWORDS.replace("$before $restAfter", " ").replace(Regex("\\s+"), " ").trim()
         text = text.replace(Regex("^(?:על|ש)\\s+"), "")
-        return Cmd.GeoRemind(text, place ?: return null)
+        return Cmd.GeoRemind(text, place ?: return null, leave, always)
     }
 }
 
