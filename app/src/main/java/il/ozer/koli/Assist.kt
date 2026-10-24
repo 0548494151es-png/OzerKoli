@@ -5,30 +5,13 @@ import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
-import android.os.Bundle
 import android.service.quicksettings.TileService
-import android.service.voice.VoiceInteractionService
-import android.service.voice.VoiceInteractionSession
-import android.service.voice.VoiceInteractionSessionService
 import android.widget.RemoteViews
 
 private fun listenIntent(c: Context) =
     Intent(c, MainActivity::class.java)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         .putExtra("listen", true)
-
-/** מאפשר לבחור את האפליקציה כ"עוזר דיגיטלי": לחיצה ארוכה על כפתור ההפעלה פותחת האזנה. לא מאזין ברקע. */
-class AssistService : VoiceInteractionService()
-
-class AssistSessionService : VoiceInteractionSessionService() {
-    override fun onNewSession(args: Bundle?): VoiceInteractionSession = object : VoiceInteractionSession(this) {
-        override fun onShow(args: Bundle?, showFlags: Int) {
-            super.onShow(args, showFlags)
-            startAssistantActivity(listenIntent(context))
-            hide()
-        }
-    }
-}
 
 /** ווידג'ט מסך הבית: לחיצה אחת מתחילה האזנה. */
 class MicWidget : AppWidgetProvider() {

@@ -54,8 +54,18 @@ class Brain(private val c: Context, private val ui: Ui) {
                 } catch (e: Exception) { ui.say("לא הצלחתי לקבוע שעון מעורר באפליקציית השעון.") }
             }
             is Cmd.SetTimer -> {
-                Scheduler.startTimer(c, cmd.seconds, "טיימר")
-                ui.say("הטיימר התחיל: " + spoken(cmd.seconds))
+                // קודם כל: טיימר אמיתי באפליקציית השעון של המכשיר. אם אי אפשר, טיימר פנימי.
+                val i = Intent(AlarmClock.ACTION_SET_TIMER)
+                    .putExtra(AlarmClock.EXTRA_LENGTH, cmd.seconds)
+                    .putExtra(AlarmClock.EXTRA_MESSAGE, "טיימר")
+                    .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                var ok = false
+                if (cmd.seconds in 1..86400) {
+                    try { c.startActivity(i); ok = true } catch (e: Exception) { ok = false }
+                }
+                if (!ok) Scheduler.startTimer(c, cmd.seconds, "טיימר")
+                ui.say((if (ok) "קבעתי טיימר בשעון: " else "הטיימר התחיל: ") + spoken(cmd.seconds))
             }
             is Cmd.Remind -> {
                 if (cmd.timeMs != null) addItem("reminder", cmd.text, cmd.timeMs)

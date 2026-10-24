@@ -69,9 +69,11 @@ fun SettingsScreen(a: MainActivity) {
                 }
                 Switch(speakOn, { Store.setBool(a, "speak_on", it); v++ })
             }
-            OutlinedButton(onClick = { a.startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS)) }, Modifier.fillMaxWidth()) {
-                Text("הגדר כעוזר הדיגיטלי של המכשיר (הפעלה בלחיצה ארוכה)")
-            }
+            Text(
+                "הפעלה מהירה בלי לפתוח את האפליקציה: ווידג'ט על מסך הבית, אריח בהגדרות המהירות (החלקה מלמעלה), " +
+                    "או לחיצה ארוכה על סמל האפליקציה > \"דבר\". אין צורך להגדיר כעוזר דיגיטלי.",
+                style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp)
+            )
             Text("בדיקת תקלות", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
         }
         items(checks) { c ->

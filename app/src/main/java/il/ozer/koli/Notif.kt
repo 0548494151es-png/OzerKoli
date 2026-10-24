@@ -9,6 +9,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.SystemClock
+import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 
@@ -59,18 +61,27 @@ object Notif {
     fun countdown(c: Context, id: Int, title: String, text: String, targetMs: Long) {
         if (!canPost(c)) return
         channels(c)
+        val remaining = targetMs - System.currentTimeMillis()
+        val base = SystemClock.elapsedRealtime() + remaining
+        fun views(layout: Int): RemoteViews {
+            val rv = RemoteViews(c.packageName, layout)
+            rv.setTextViewText(R.id.nc_title, title)
+            rv.setTextViewText(R.id.nc_sub, text)
+            rv.setChronometerCountDown(R.id.nc_chrono, true)
+            rv.setChronometer(R.id.nc_chrono, base, null, true)
+            return rv
+        }
         val b = NotificationCompat.Builder(c, CH_COUNT)
             .setSmallIcon(R.drawable.ic_stat)
             .setContentTitle(title)
             .setContentText(text)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            .setShowWhen(true)
-            .setUsesChronometer(true)
-            .setChronometerCountDown(true)
-            .setWhen(targetMs)
+            .setShowWhen(false)
+            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+            .setCustomContentView(views(R.layout.notif_countdown_small))
+            .setCustomBigContentView(views(R.layout.notif_countdown_big))
             .setContentIntent(open(c))
-        val remaining = targetMs - System.currentTimeMillis()
         if (remaining > 0) b.setTimeoutAfter(remaining)
         c.getSystemService(NotificationManager::class.java).notify(id, b.build())
     }

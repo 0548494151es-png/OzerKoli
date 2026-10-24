@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">עוזר קולי</string>
+    <string name="shortcut_listen">דבר</string>
+    <string name="shortcut_listen_long">דבר עם העוזר</string>
 </resources>
