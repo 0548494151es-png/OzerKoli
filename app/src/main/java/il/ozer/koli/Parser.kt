@@ -218,7 +218,7 @@ object Parser {
         val before = s.substring(0, m.range.first)
         val raw = s.substring(m.range.last + 1).trim()
         val stripped = raw.replace(Regex(if (leave) "^(?:מן\\s+|מ)" else "^(?:לתוך\\s+|אל\\s+|ל|ב)"), "")
-        fun nz(x: String) = x.trim().removePrefix("ה")
+        fun nz(x: String) = Names.norm(x)
         var place: String? = null
         var restAfter = stripped
         var after = stripped
@@ -276,4 +276,10 @@ object Num {
         flush()
         return out.joinToString(" ")
     }
+}
+
+/** נרמול שם מקום להשוואה: בלי אימוג'י וסימנים, בלי "ה" בהתחלה. */
+object Names {
+    fun norm(s: String): String =
+        s.filter { it.isLetterOrDigit() || it == ' ' }.replace(Regex("\\s+"), " ").trim().removePrefix("ה")
 }

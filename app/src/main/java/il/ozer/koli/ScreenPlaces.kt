@@ -30,6 +30,7 @@ fun PlacesScreen(a: MainActivity) {
     var pAddr by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<Triple<String, Double, Double>>?>(null) }
+    var checkLines by remember { mutableStateOf<List<String>?>(null) }
 
     LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
         item {
@@ -67,6 +68,10 @@ fun PlacesScreen(a: MainActivity) {
             Text("רדיוס זיהוי: 100 מטר. אם מקום נשמר לפי כתובת והוא לא מדויק, לחץ עליו \"עדכן למיקום הנוכחי\" כשאתה שם.",
                 style = MaterialTheme.typography.bodySmall)
             if (status.isNotEmpty()) Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            OutlinedButton(onClick = {
+                if (!Geo.hasFine(a)) a.requestPerms(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)) { v++ }
+                else { status = "בודק מיקום..."; Geo.checkNow(a) { checkLines = it; status = "" } }
+            }, Modifier.fillMaxWidth().padding(top = 4.dp)) { Text("בדיקת מיקום: כמה רחוק אני מכל מקום") }
         }
         items(places) { p ->
             ListItem(
@@ -133,6 +138,15 @@ fun PlacesScreen(a: MainActivity) {
                 if (status.isNotEmpty()) Text(status, style = MaterialTheme.typography.bodySmall)
             }
         }
+    }
+
+    checkLines?.let { lines ->
+        AlertDialog(
+            onDismissRequest = { checkLines = null },
+            title = { Text("בדיקת מיקום") },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { lines.forEach { Text(it) } } },
+            confirmButton = { TextButton(onClick = { checkLines = null }) { Text("סגור") } }
+        )
     }
 
     results?.let { r ->

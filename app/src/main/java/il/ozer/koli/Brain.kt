@@ -191,7 +191,7 @@ class Brain(private val c: Context, private val ui: Ui) {
     }
 
     // ---------- מיקום ----------
-    private fun norm(s: String) = s.trim().removePrefix("ה")
+    private fun norm(s: String) = Names.norm(s)
 
     private fun savePlace(name: String) {
         if (!Geo.hasFine(c)) {
@@ -221,6 +221,7 @@ class Brain(private val c: Context, private val ui: Ui) {
         }
         Store.saveGeos(c, Store.geos(c) + GeoRem(Store.nextId(c), cmd.text, place.name, cmd.leave, cmd.always))
         Geo.registerAll(c)
+        Elog.add(c, "נוצרה תזכורת מקום: \"${cmd.text}\" ב${place.name} (" + (if (cmd.leave) "יציאה" else "כניסה") + ", " + (if (cmd.always) "בכל פעם" else "פעם אחת") + ")")
         val when_ = if (cmd.leave) "כשתצא מ${place.name}" else "כשתגיע ל${place.name}"
         ui.say("אזכיר לך ${cmd.text} $when_" + if (cmd.always) " (בכל פעם)" else "")
     }

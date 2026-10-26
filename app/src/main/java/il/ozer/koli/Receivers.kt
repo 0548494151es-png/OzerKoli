@@ -56,10 +56,18 @@ class BootReceiver : BroadcastReceiver() {
 
 class GeoReceiver : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
-        val ev = GeofencingEvent.fromIntent(i) ?: return
-        if (ev.hasError()) return
+        Elog.add(c, "התקבל אירוע גיאו-גדר מהמערכת")
+        val ev = GeofencingEvent.fromIntent(i)
+        if (ev == null) { Elog.add(c, "גיאו-גדר: האירוע ריק"); return }
+        if (ev.hasError()) {
+            Elog.add(c, "שגיאת גיאו-גדר: " + com.google.android.gms.location.GeofenceStatusCodes.getStatusCodeString(ev.errorCode))
+            return
+        }
         val t = ev.geofenceTransition
-        if (t != Geofence.GEOFENCE_TRANSITION_ENTER && t != Geofence.GEOFENCE_TRANSITION_EXIT) return
+        if (t != Geofence.GEOFENCE_TRANSITION_ENTER && t != Geofence.GEOFENCE_TRANSITION_EXIT) {
+            Elog.add(c, "גיאו-גדר: סוג מעבר לא צפוי ($t)")
+            return
+        }
         val ids = ev.triggeringGeofences?.map { it.requestId } ?: return
         val geos = Store.geos(c)
         val loc = ev.triggeringLocation
