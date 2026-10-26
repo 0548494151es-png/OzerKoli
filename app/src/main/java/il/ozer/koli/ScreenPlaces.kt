@@ -1,6 +1,8 @@
 package il.ozer.koli
 
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -62,10 +64,32 @@ fun PlacesScreen(a: MainActivity) {
         }
         item {
             Text("המקומות שלי", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 24.dp))
+            Text("רדיוס זיהוי: 100 מטר. אם מקום נשמר לפי כתובת והוא לא מדויק, לחץ עליו \"עדכן למיקום הנוכחי\" כשאתה שם.",
+                style = MaterialTheme.typography.bodySmall)
+            if (status.isNotEmpty()) Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
         }
         items(places) { p ->
             ListItem(
                 headlineContent = { Text(p.name) },
+                supportingContent = {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(onClick = {
+                            try {
+                                a.startActivity(Intent(Intent.ACTION_VIEW,
+                                    Uri.parse("geo:${p.lat},${p.lng}?q=${p.lat},${p.lng}(${Uri.encode(p.name)})")))
+                            } catch (e: Exception) { status = "אין אפליקציית מפות" }
+                        }) { Text("במפה") }
+                        TextButton(onClick = {
+                            if (!Geo.hasFine(a)) a.requestPerms(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)) { v++ }
+                            else {
+                                status = "מעדכן את ${p.name} למיקום הנוכחי..."
+                                Geo.saveCurrentPlace(a, p.name) { ok ->
+                                    status = if (ok) "עודכן: ${p.name}" else "לא הצלחתי לקבל מיקום"; v++
+                                }
+                            }
+                        }) { Text("עדכן למיקום הנוכחי") }
+                    }
+                },
                 trailingContent = {
                     IconButton(onClick = {
                         Store.savePlaces(a, Store.places(a).filter { it.name != p.name })

@@ -12,6 +12,7 @@ sealed class Cmd {
     data class AddEvent(val title: String, val timeMs: Long?) : Cmd()
     data class SavePlace(val name: String, val address: String? = null) : Cmd()
     data class ShowEvents(val dayOffset: Int) : Cmd()
+    object SchoolLeft : Cmd()
     data class CandleTime(val hour: Int, val min: Int) : Cmd()
     object ShabbatNow : Cmd()
     data class Unknown(val raw: String) : Cmd()
@@ -137,6 +138,9 @@ object Parser {
             if (n.startsWith("ל") && n.length > 2) n = n.substring(1)
             return Cmd.Call(n)
         }
+
+        if (s.contains("כמה ימים") && Regex("שנת הלימודים|סוף השנה|סוף שנה|החופש הגדול|סוף הלימודים|תום השנה").containsMatchIn(s))
+            return Cmd.SchoolLeft
 
         parseGeo(s, places)?.let { return it }
 

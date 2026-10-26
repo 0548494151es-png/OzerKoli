@@ -11,6 +11,9 @@ class AlarmReceiver : BroadcastReceiver() {
         val type = i.getStringExtra("type") ?: return
         val id = i.getIntExtra("id", 0)
         val title = i.getStringExtra("title") ?: ""
+        val at = i.getLongExtra("at", 0L)
+        val late = if (at > 0) (System.currentTimeMillis() - at) / 1000 else 0L
+        Elog.add(c, "קפץ: $type \"$title\" (איחור $late שניות)")
         when (type) {
             "item" -> {
                 Notif.alert(c, id, "תזכורת", title)
@@ -21,11 +24,9 @@ class AlarmReceiver : BroadcastReceiver() {
                     "weekly" -> it.timeMs + 7 * 86_400_000L
                     else -> 0L
                 }
-                if (next > 0) {
-                    val upd = it.copy(timeMs = next)
-                    Store.saveItems(c, list.map { x -> if (x.id == id) upd else x })
-                    Scheduler.scheduleItem(c, upd)
-                }
+                val upd = if (next > 0) it.copy(timeMs = next, fired = false) else it.copy(fired = true)
+                Store.saveItems(c, list.map { x -> if (x.id == id) upd else x })
+                if (next > 0) Scheduler.scheduleItem(c, upd)
             }
             "timer" -> {
                 Notif.cancel(c, id)
@@ -47,7 +48,10 @@ class AlarmReceiver : BroadcastReceiver() {
 }
 
 class BootReceiver : BroadcastReceiver() {
-    override fun onReceive(c: Context, i: Intent) = Scheduler.rescheduleAll(c)
+    override fun onReceive(c: Context, i: Intent) {
+        Elog.add(c, "תוזמן מחדש (${i.action?.substringAfterLast('.')})")
+        Scheduler.rescheduleAll(c)
+    }
 }
 
 class GeoReceiver : BroadcastReceiver() {
@@ -58,6 +62,19 @@ class GeoReceiver : BroadcastReceiver() {
         if (t != Geofence.GEOFENCE_TRANSITION_ENTER && t != Geofence.GEOFENCE_TRANSITION_EXIT) return
         val ids = ev.triggeringGeofences?.map { it.requestId } ?: return
         val geos = Store.geos(c)
+        val loc = ev.triggeringLocation
+        val places = Store.places(c)
+        geos.filter { ids.contains("g${it.id}") }.forEach { g ->
+            val p = places.firstOrNull { x -> x.name == g.place }
+            var d = -1
+            if (loc != null && p != null) {
+                val r = FloatArray(1)
+                android.location.Location.distanceBetween(loc.latitude, loc.longitude, p.lat, p.lng, r)
+                d = r[0].toInt()
+            }
+            Elog.add(c, "גיאו-גדר: ${g.place} " + (if (t == Geofence.GEOFENCE_TRANSITION_EXIT) "יציאה" else "כניסה") +
+                ", מרחק מהנקודה השמורה $d מ', דיוק מיקום ${loc?.accuracy?.toInt() ?: -1} מ'")
+        }
         val fired = geos.filter { ids.contains("g${it.id}") && it.on && it.leave == (t == Geofence.GEOFENCE_TRANSITION_EXIT) }
         fired.forEach {
             val head = if (it.leave) "יצאת מ${it.place}" else "הגעת ל${it.place}"

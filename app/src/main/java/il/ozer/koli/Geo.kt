@@ -10,6 +10,7 @@ import android.os.Handler
 import android.os.Looper
 import java.util.Locale
 import androidx.core.content.ContextCompat
+import com.google.android.gms.location.CurrentLocationRequest
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingRequest
 import com.google.android.gms.location.LocationServices
@@ -18,6 +19,7 @@ import com.google.android.gms.tasks.CancellationTokenSource
 
 /** גיאו-גדרות של אנדרואיד: המערכת עצמה מנהלת אותן, בלי שירות שרץ ובלי עלות סוללה משמעותית. */
 object Geo {
+    const val RADIUS = 100f
     private fun pi(c: Context): PendingIntent = PendingIntent.getBroadcast(
         c, 7001, Intent(c, GeoReceiver::class.java),
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
@@ -39,7 +41,7 @@ object Geo {
             val p = places.firstOrNull { it.name == g.place } ?: return@mapNotNull null
             Geofence.Builder()
                 .setRequestId("g${g.id}")
-                .setCircularRegion(p.lat, p.lng, 150f)
+                .setCircularRegion(p.lat, p.lng, RADIUS)
                 .setExpirationDuration(Geofence.NEVER_EXPIRE)
                 .setTransitionTypes(if (g.leave) Geofence.GEOFENCE_TRANSITION_EXIT else Geofence.GEOFENCE_TRANSITION_ENTER)
                 .build()
@@ -50,19 +52,27 @@ object Geo {
             .addGeofences(fences)
             .build()
         client.addGeofences(req, pi(c))
+            .addOnSuccessListener { Elog.add(c, "נרשמו ${fences.size} גדרות מיקום (רדיוס ${RADIUS.toInt()} מ')") }
+            .addOnFailureListener { e -> Elog.add(c, "רישום גדרות מיקום נכשל: ${e.message}") }
     }
 
     /** שומר את המיקום הנוכחי בשם נתון. הבקשה חד-פעמית. */
     @SuppressLint("MissingPermission")
     fun saveCurrentPlace(c: Context, name: String, done: (Boolean) -> Unit) {
         if (!hasFine(c)) { done(false); return }
+        val req = CurrentLocationRequest.Builder()
+            .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
+            .setDurationMillis(20000)
+            .setMaxUpdateAgeMillis(10000)
+            .build()
         LocationServices.getFusedLocationProviderClient(c)
-            .getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, CancellationTokenSource().token)
+            .getCurrentLocation(req, CancellationTokenSource().token)
             .addOnSuccessListener { loc ->
                 if (loc == null) { done(false); return@addOnSuccessListener }
                 val list = Store.places(c).filter { it.name != name }.toMutableList()
                 list.add(Place(name, loc.latitude, loc.longitude))
                 Store.savePlaces(c, list)
+                Elog.add(c, "נשמר מקום \"$name\", דיוק ${loc.accuracy.toInt()} מ'")
                 registerAll(c)
                 done(true)
             }

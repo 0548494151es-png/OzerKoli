@@ -39,8 +39,16 @@ object Notif {
     )
 
     fun alert(c: Context, id: Int, title: String, text: String) {
-        if (!canPost(c)) return
+        val nm = c.getSystemService(NotificationManager::class.java)
+        if (!canPost(c) || !nm.areNotificationsEnabled()) {
+            Elog.add(c, "התראה נחסמה: ההתראות כבויות לאפליקציה ($title: $text)")
+            return
+        }
         channels(c)
+        if (nm.getNotificationChannel(CH_ALERT)?.importance == NotificationManager.IMPORTANCE_NONE) {
+            Elog.add(c, "התראה נחסמה: ערוץ ההתראות כבוי ($title: $text)")
+            return
+        }
         val n = NotificationCompat.Builder(c, CH_ALERT)
             .setSmallIcon(R.drawable.ic_stat)
             .setContentTitle(title)
@@ -51,7 +59,8 @@ object Notif {
             .setContentIntent(open(c))
             .setDefaults(Notification.DEFAULT_ALL)
             .build()
-        c.getSystemService(NotificationManager::class.java).notify(id, n)
+        nm.notify(id, n)
+        Elog.add(c, "הוצגה התראה: $title - $text")
     }
 
     /**

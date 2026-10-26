@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -48,9 +49,16 @@ fun RemindersScreen(a: MainActivity) {
         LazyColumn(Modifier.weight(1f)) {
             items(list) { it ->
                 val past = it.timeMs < System.currentTimeMillis()
+                val missed = past && !it.fired && it.repeat == "none" && it.timeMs < System.currentTimeMillis() - 60_000
                 ListItem(
-                    headlineContent = { Text(it.title) },
-                    supportingContent = { Text((if (it.kind == "event") "אירוע · " else "תזכורת · ") + f.format(Date(it.timeMs)) + if (past) " (עבר)" else "") },
+                    headlineContent = { Text(it.title, color = if (missed) MaterialTheme.colorScheme.error else Color.Unspecified) },
+                    supportingContent = {
+                        Text(
+                            (if (it.kind == "event") "אירוע · " else "תזכורת · ") + f.format(Date(it.timeMs)) +
+                                (if (missed) " (הוחמצה: לא קפצה)" else if (past) " (עבר)" else ""),
+                            color = if (missed) MaterialTheme.colorScheme.error else Color.Unspecified
+                        )
+                    },
                     trailingContent = {
                         IconButton(onClick = {
                             Scheduler.cancelItem(a, it.id)

@@ -9,10 +9,10 @@ import java.util.Calendar
 
 /** כל התזמונים עוברים דרך AlarmManager של המערכת: האפליקציה לא רצה ברקע. */
 object Scheduler {
-    private fun pi(c: Context, req: Int, type: String, id: Int, title: String, create: Boolean): PendingIntent? {
+    private fun pi(c: Context, req: Int, type: String, id: Int, title: String, create: Boolean, at: Long = 0L): PendingIntent? {
         val i = Intent(c, AlarmReceiver::class.java)
             .setAction("ozer.$type.$req")
-            .putExtra("type", type).putExtra("id", id).putExtra("title", title)
+            .putExtra("type", type).putExtra("id", id).putExtra("title", title).putExtra("at", at)
         val flags = PendingIntent.FLAG_IMMUTABLE or
             (if (create) PendingIntent.FLAG_UPDATE_CURRENT else PendingIntent.FLAG_NO_CREATE)
         return PendingIntent.getBroadcast(c, req, i, flags)
@@ -20,11 +20,11 @@ object Scheduler {
 
     fun set(c: Context, req: Int, atMs: Long, type: String, id: Int, title: String) {
         val am = c.getSystemService(AlarmManager::class.java)
-        val p = pi(c, req, type, id, title, true)!!
-        if (Build.VERSION.SDK_INT >= 31 && !am.canScheduleExactAlarms())
-            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMs, p)
-        else
-            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMs, p)
+        val p = pi(c, req, type, id, title, true, atMs)!!
+        val exact = Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms()
+        if (exact) am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMs, p)
+        else am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMs, p)
+        Elog.add(c, "תוזמן: $type \"$title\" ל-${Elog.fmt(atMs)}" + if (exact) "" else " (לא מדויק: אין הרשאת התראות מדויקות)")
     }
 
     fun cancel(c: Context, req: Int, type: String) {

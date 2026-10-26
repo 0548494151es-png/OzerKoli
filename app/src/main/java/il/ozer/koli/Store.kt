@@ -4,7 +4,7 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class Item(val id: Int, val title: String, val timeMs: Long, val kind: String, val repeat: String)
+data class Item(val id: Int, val title: String, val timeMs: Long, val kind: String, val repeat: String, val fired: Boolean = false)
 data class Place(val name: String, val lat: Double, val lng: Double)
 data class GeoRem(val id: Int, val text: String, val place: String, val leave: Boolean = false, val always: Boolean = false, val on: Boolean = true)
 data class Lesson(val id: Int, val title: String, val dow: Int, val hour: Int, val min: Int, val before: Int)
@@ -37,10 +37,10 @@ object Store {
 
     // ---- תזכורות ואירועי יומן ----
     fun items(c: Context) = load(c, "items") {
-        Item(it.getInt("id"), it.getString("t"), it.getLong("ms"), it.getString("k"), it.optString("r", "none"))
+        Item(it.getInt("id"), it.getString("t"), it.getLong("ms"), it.getString("k"), it.optString("r", "none"), it.optBoolean("fd", false))
     }
     fun saveItems(c: Context, l: List<Item>) = save(c, "items", l) {
-        JSONObject().put("id", it.id).put("t", it.title).put("ms", it.timeMs).put("k", it.kind).put("r", it.repeat)
+        JSONObject().put("id", it.id).put("t", it.title).put("ms", it.timeMs).put("k", it.kind).put("r", it.repeat).put("fd", it.fired)
     }
 
     // ---- מקומות ותזכורות מיקום ----
@@ -72,6 +72,8 @@ object Store {
     // ---- הגדרות ----
     fun bool(c: Context, k: String, d: Boolean = false) = sp(c).getBoolean(k, d)
     fun setBool(c: Context, k: String, v: Boolean) = sp(c).edit().putBoolean(k, v).apply()
+    fun str(c: Context, k: String, d: String = "") = sp(c).getString(k, d) ?: d
+    fun setStr(c: Context, k: String, v: String) = sp(c).edit().putString(k, v).apply()
     fun int(c: Context, k: String, d: Int) = sp(c).getInt(k, d)
     fun setInt(c: Context, k: String, v: Int) = sp(c).edit().putInt(k, v).apply()
 }

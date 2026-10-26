@@ -23,6 +23,7 @@ fun SettingsScreen(a: MainActivity) {
     val tick = a.state.tick
     var v by remember { mutableStateOf(0) }
     val teacher = remember(v) { Store.bool(a, "teacher") }
+    var showLog by remember { mutableStateOf(false) }
     val speakOn = remember(v) { Store.bool(a, "speak_on") }
 
     fun granted(p: String) = a.checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED
@@ -54,6 +55,8 @@ fun SettingsScreen(a: MainActivity) {
         }
     }
 
+    if (showLog) LogDialog(a) { showLog = false }
+
     LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
         item {
             Text("הגדרות", style = MaterialTheme.typography.titleLarge)
@@ -76,6 +79,7 @@ fun SettingsScreen(a: MainActivity) {
                 }
                 Switch(speakOn, { Store.setBool(a, "speak_on", it); v++ })
             }
+            OutlinedButton(onClick = { showLog = true }, Modifier.fillMaxWidth()) { Text("יומן אירועים (למה תזכורת לא קפצה)") }
             Text(
                 "הפעלה מהירה בלי לפתוח את האפליקציה: ווידג'ט על מסך הבית, אריח בהגדרות המהירות (החלקה מלמעלה), " +
                     "או לחיצה ארוכה על סמל האפליקציה > \"דבר\". אין צורך להגדיר כעוזר דיגיטלי.",
@@ -98,4 +102,30 @@ fun SettingsScreen(a: MainActivity) {
             )
         }
     }
+}
+
+@Composable
+private fun LogDialog(a: MainActivity, onClose: () -> Unit) {
+    var n by remember { mutableStateOf(0) }
+    val lines = remember(n) { Elog.all(a) }
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("יומן אירועים") },
+        text = {
+            if (lines.isEmpty()) Text("אין אירועים עדיין.")
+            else LazyColumn(Modifier.heightIn(max = 420.dp)) {
+                items(lines) { l -> Text(l, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 2.dp)) }
+            }
+        },
+        confirmButton = {
+            Row {
+                TextButton(onClick = {
+                    val cm = a.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    cm.setPrimaryClip(android.content.ClipData.newPlainText("log", lines.reversed().joinToString("\n")))
+                }) { Text("העתק") }
+                TextButton(onClick = { Elog.clear(a); n++ }) { Text("נקה") }
+            }
+        },
+        dismissButton = { TextButton(onClick = onClose) { Text("סגור") } }
+    )
 }

@@ -91,6 +91,7 @@ class Brain(private val c: Context, private val ui: Ui) {
                 Shabbat.schedule(c)
                 ui.say("הדלקת נרות נקבעה ל-" + Shabbat.timeText(c))
             }
+            Cmd.SchoolLeft -> ui.say(SchoolYear.summary(c))
             Cmd.ShabbatNow -> {
                 Shabbat.showCountdown(c)
                 val left = ((Shabbat.nextCandle(c) - System.currentTimeMillis()) / 1000).toInt()

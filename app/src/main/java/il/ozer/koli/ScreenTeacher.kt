@@ -33,6 +33,7 @@ fun TeacherScreen(a: MainActivity) {
     var cTotal by remember { mutableStateOf("") }
 
     LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
+        item { SchoolCard(a) }
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("מערכת שעות", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
