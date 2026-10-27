@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
@@ -23,6 +25,8 @@ class AppState {
     var confirm by mutableStateOf<Confirm?>(null)
     var choice by mutableStateOf<Choice?>(null)
     var tick by mutableStateOf(0) // מרענן רשימות אחרי שינוי
+    var themeMode by mutableStateOf("system") // system / light / dark
+    val update = UpdateState()
 }
 
 class MainActivity : ComponentActivity(), Ui {
@@ -40,6 +44,10 @@ class MainActivity : ComponentActivity(), Ui {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge(statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
+        state.themeMode = Store.str(this, "theme", "system")
+        Updater.cleanup(this)
+        Updater.autoCheck(this)
         Notif.channels(this)
         tts = Tts(this)
         brain = Brain(this, this)

@@ -20,7 +20,7 @@ fun SchoolCard(a: MainActivity) {
     val cal = remember(v, a.state.tick) { SchoolYear.calendarDaysLeft() }
     val fmt = remember { DateTimeFormatter.ofPattern("dd/MM/yyyy") }
 
-    Card(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+    Card(Modifier.fillMaxWidth().padding(bottom = 16.dp), shape = MaterialTheme.shapes.large, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("עד סוף שנת הלימודים תשפ\"ז", style = MaterialTheme.typography.titleMedium)
             if (cal < 0) {

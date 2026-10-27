@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,7 +33,9 @@ fun TeacherScreen(a: MainActivity) {
     var cTitle by remember { mutableStateOf("") }
     var cTotal by remember { mutableStateOf("") }
 
-    LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
+    Column(Modifier.fillMaxSize()) {
+    ScreenHeader("מצב מורה", "מערכת שעות, בדיקות וספירה לסוף השנה", Icons.Filled.School)
+    LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(16.dp)) {
         item { SchoolCard(a) }
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -41,7 +44,8 @@ fun TeacherScreen(a: MainActivity) {
             }
         }
         items(lessons) { l ->
-            ListItem(
+            ListCard { ListItem(
+                colors = ListItemColors(),
                 headlineContent = { Text(l.title) },
                 supportingContent = {
                     Text("יום ${DAY_NAMES.first { it.second == l.dow }.first} · " +
@@ -54,7 +58,7 @@ fun TeacherScreen(a: MainActivity) {
                     }) { Icon(Icons.Filled.Delete, "מחק") }
                 }
             )
-            HorizontalDivider()
+            }
         }
         item {
             Row(Modifier.padding(top = 20.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -63,7 +67,8 @@ fun TeacherScreen(a: MainActivity) {
             }
         }
         items(checks) { ck ->
-            ListItem(
+            ListCard { ListItem(
+                colors = ListItemColors(),
                 headlineContent = { Text(ck.title) },
                 supportingContent = { LinearProgressIndicator(progress = { if (ck.total == 0) 0f else ck.done.toFloat() / ck.total }, Modifier.fillMaxWidth()) },
                 trailingContent = {
@@ -77,8 +82,9 @@ fun TeacherScreen(a: MainActivity) {
                     }
                 }
             )
-            HorizontalDivider()
+            }
         }
+    }
     }
 
     if (addLesson) {

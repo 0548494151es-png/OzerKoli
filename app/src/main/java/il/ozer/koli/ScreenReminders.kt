@@ -9,6 +9,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -41,16 +43,17 @@ fun RemindersScreen(a: MainActivity) {
     val list = remember(tick, local) { Store.items(a).sortedBy { it.timeMs } }
     val f = remember { SimpleDateFormat("EEEE dd/MM HH:mm", Locale("he", "IL")) }
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("תזכורות ויומן", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-            Button(onClick = { showAdd = true }) { Icon(Icons.Filled.Add, null); Text("הוסף") }
+    Column(Modifier.fillMaxSize()) {
+        ScreenHeader("תזכורות ויומן", "${list.size} פריטים", Icons.Filled.Notifications) {
+            FilledTonalButton(onClick = { showAdd = true }) { Icon(Icons.Filled.Add, null); Text("הוסף") }
         }
-        LazyColumn(Modifier.weight(1f)) {
+        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(16.dp)) {
             items(list) { it ->
                 val past = it.timeMs < System.currentTimeMillis()
                 val missed = past && !it.fired && it.repeat == "none" && it.timeMs < System.currentTimeMillis() - 60_000
-                ListItem(
+                ListCard { ListItem(
+                    colors = ListItemColors(),
+                    leadingContent = { IconBadge(if (it.kind == "event") Icons.Filled.Event else Icons.Filled.Notifications) },
                     headlineContent = { Text(it.title, color = if (missed) MaterialTheme.colorScheme.error else Color.Unspecified) },
                     supportingContent = {
                         Text(
@@ -67,10 +70,10 @@ fun RemindersScreen(a: MainActivity) {
                         }) { Icon(Icons.Filled.Delete, "מחק") }
                     }
                 )
-                HorizontalDivider()
+                }
             }
         }
-        Text("תזכורות לפי מקום נמצאות בלשונית \"מקומות\".", style = MaterialTheme.typography.bodySmall)
+        Text("תזכורות לפי מקום נמצאות בלשונית \"מקומות\".", Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall)
     }
 
     if (showAdd) {

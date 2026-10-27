@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,19 +33,20 @@ fun PlacesScreen(a: MainActivity) {
     var results by remember { mutableStateOf<List<Triple<String, Double, Double>>?>(null) }
     var checkLines by remember { mutableStateOf<List<String>?>(null) }
 
-    LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
+    Column(Modifier.fillMaxSize()) {
+    ScreenHeader("תזכורות לפי מקום", "${geos.size} תזכורות · ${places.size} מקומות", Icons.Filled.Place) {
+        FilledTonalButton(onClick = { showAdd = true }, enabled = places.isNotEmpty()) { Icon(Icons.Filled.Add, null); Text("הוסף") }
+    }
+    LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(16.dp)) {
         item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("תזכורות לפי מקום", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                Button(onClick = { showAdd = true }, enabled = places.isNotEmpty()) { Icon(Icons.Filled.Add, null); Text("הוסף") }
-            }
             if (places.isEmpty()) Text("קודם הוסף מקום למטה, ואז אפשר ליצור תזכורת.", style = MaterialTheme.typography.bodySmall)
             if (!Geo.hasBackground(a))
                 Text("שים לב: כדי שזה יעבוד כשהאפליקציה סגורה, אשר מיקום 'תמיד' בהגדרות > בדיקת תקלות.",
                     color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
         }
         items(geos) { g ->
-            ListItem(
+            ListCard { ListItem(
+                colors = ListItemColors(),
                 headlineContent = { Text(g.text) },
                 supportingContent = {
                     Text((if (g.leave) "כשאצא מ" else "כשאגיע ל") + g.place + " · " + (if (g.always) "בכל פעם" else "פעם אחת"))
@@ -61,10 +63,10 @@ fun PlacesScreen(a: MainActivity) {
                     }
                 }
             )
-            HorizontalDivider()
+            }
         }
         item {
-            Text("המקומות שלי", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 24.dp))
+            SectionTitle("המקומות שלי")
             Text("רדיוס זיהוי: 100 מטר. אם מקום נשמר לפי כתובת והוא לא מדויק, לחץ עליו \"עדכן למיקום הנוכחי\" כשאתה שם.",
                 style = MaterialTheme.typography.bodySmall)
             if (status.isNotEmpty()) Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
@@ -74,7 +76,8 @@ fun PlacesScreen(a: MainActivity) {
             }, Modifier.fillMaxWidth().padding(top = 4.dp)) { Text("בדיקת מיקום: כמה רחוק אני מכל מקום") }
         }
         items(places) { p ->
-            ListItem(
+            ListCard { ListItem(
+                colors = ListItemColors(),
                 headlineContent = { Text(p.name) },
                 supportingContent = {
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -103,7 +106,7 @@ fun PlacesScreen(a: MainActivity) {
                     }) { Icon(Icons.Filled.Delete, "מחק") }
                 }
             )
-            HorizontalDivider()
+            }
         }
         item {
             Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -138,6 +141,7 @@ fun PlacesScreen(a: MainActivity) {
                 if (status.isNotEmpty()) Text(status, style = MaterialTheme.typography.bodySmall)
             }
         }
+    }
     }
 
     checkLines?.let { lines ->

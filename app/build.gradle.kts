@@ -4,6 +4,9 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// מספר הגרסה מגיע מ-GitHub Actions (-Pvcode=מספר ההרצה), כדי שכל גרסה חדשה תהיה גבוהה מהקודמת
+val vcode = (project.findProperty("vcode") as String?)?.toIntOrNull() ?: 1
+
 android {
     namespace = "il.ozer.koli"
     compileSdk = 34
@@ -12,14 +15,27 @@ android {
         applicationId = "il.ozer.koli"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = vcode
+        versionName = "1.$vcode"
+    }
+
+    // חתימה קבועה: חובה כדי שהאפליקציה תוכל להתעדכן על עצמה
+    signingConfigs {
+        create("ozer") {
+            storeFile = file("ozer.jks")
+            storePassword = "ozerkoli"
+            keyAlias = "ozer"
+            keyPassword = "ozerkoli"
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("ozer")
+        }
+        debug {
+            signingConfig = signingConfigs.getByName("ozer")
         }
     }
     compileOptions {

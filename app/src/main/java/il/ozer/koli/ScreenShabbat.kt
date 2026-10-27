@@ -2,6 +2,10 @@ package il.ozer.koli
 
 import android.app.TimePickerDialog
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,13 +20,14 @@ fun ShabbatScreen(a: MainActivity) {
     val before = remember(v) { Shabbat.hoursBefore(a) }
     val next = remember(v) { Shabbat.describe(a) }
 
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("טיימר ערב שבת", style = MaterialTheme.typography.titleLarge)
+    Column(Modifier.fillMaxSize()) {
+    ScreenHeader("טיימר ערב שבת", "ספירה לאחור להדלקת נרות", Icons.Filled.Timer)
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("ספירה לאחור שבועית בימי שישי", Modifier.weight(1f))
             Switch(on, { Store.setBool(a, "shabbat_on", it); Shabbat.schedule(a); v++ })
         }
-        Card(Modifier.fillMaxWidth()) {
+        Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("זמן הדלקת נרות: $time", style = MaterialTheme.typography.headlineSmall)
                 Button(onClick = {
@@ -47,5 +52,6 @@ fun ShabbatScreen(a: MainActivity) {
                 "אפשר גם בקול: \"הדלקת נרות ב-17:32\".",
             style = MaterialTheme.typography.bodySmall
         )
+    }
     }
 }
