@@ -3,19 +3,10 @@ package il.ozer.koli
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -24,11 +15,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -39,7 +25,7 @@ fun AppUi(a: MainActivity) {
     LaunchedEffect(dark) {
         val clear = android.graphics.Color.TRANSPARENT
         a.enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(clear),
+            statusBarStyle = if (dark) SystemBarStyle.dark(clear) else SystemBarStyle.light(clear, clear),
             navigationBarStyle = if (dark) SystemBarStyle.dark(clear) else SystemBarStyle.light(clear, clear)
         )
     }
@@ -49,7 +35,7 @@ fun AppUi(a: MainActivity) {
             val teacher = a.state.tick.let { Store.bool(a, "teacher") }
             val hasUpdate = a.state.update.status.let { it == "available" || it == "ready" || it == "downloading" }
             val tabs = buildList {
-                add("עוזר" to Icons.Filled.Mic)
+                add("עוזר" to Icons.Filled.Chat)
                 add("תזכורות" to Icons.Filled.Notifications)
                 add("מקומות" to Icons.Filled.Place)
                 add("שבת" to Icons.Filled.Timer)
@@ -107,36 +93,28 @@ private fun Bubble(line: String) {
     }
 }
 
-@Composable
-private fun MicButton(listening: Boolean, onClick: () -> Unit) {
-    val inf = rememberInfiniteTransition(label = "pulse")
-    val scale by inf.animateFloat(1f, 1.6f, infiniteRepeatable(tween(1100, easing = LinearEasing), RepeatMode.Restart), label = "s")
-    val alpha by inf.animateFloat(0.45f, 0f, infiniteRepeatable(tween(1100, easing = LinearEasing), RepeatMode.Restart), label = "a")
-    Box(Modifier.size(108.dp), contentAlignment = Alignment.Center) {
-        if (listening) Box(Modifier.size(76.dp).scale(scale).alpha(alpha).background(MaterialTheme.colorScheme.primary, CircleShape))
-        Box(
-            Modifier.size(76.dp).shadow(10.dp, CircleShape).clip(CircleShape).background(brandBrush()).clickable(onClick = onClick),
-            contentAlignment = Alignment.Center
-        ) { Icon(if (listening) Icons.Filled.Stop else Icons.Filled.Mic, "דבר", tint = Color.White, modifier = Modifier.size(38.dp)) }
-    }
-}
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AssistantScreen(a: MainActivity) {
     val s = a.state
     var typed by remember { mutableStateOf("") }
     val cs = MaterialTheme.colorScheme
-    Column(Modifier.fillMaxSize()) {
-        ScreenHeader("עוזר קולי", if (s.listening) "מקשיב..." else "לחץ על המיקרופון ודבר", Icons.Filled.Mic) {
-            if (s.log.isNotEmpty() || s.confirm != null || s.choice != null)
-                TextButton(
-                    onClick = { s.log.clear(); s.confirm = null; s.choice = null },
-                    colors = ButtonDefaults.textButtonColors(contentColor = Color.White)
-                ) { Text("נקה") }
+    val hasContent = s.log.isNotEmpty() || s.confirm != null || s.choice != null
+    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        if (hasContent || s.listening) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 12.dp).height(40.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(if (s.listening) "מקשיב..." else "", color = cs.primary, style = MaterialTheme.typography.labelLarge)
+                if (hasContent) {
+                    TextButton(onClick = { s.log.clear(); s.confirm = null; s.choice = null }) { Text("נקה") }
+                }
+            }
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            if (s.log.isEmpty() && s.confirm == null && s.choice == null) {
+            if (!hasContent) {
                 Column(
                     Modifier.align(Alignment.Center).padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -174,19 +152,21 @@ fun AssistantScreen(a: MainActivity) {
             }
         }
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             OutlinedTextField(
-                typed, { typed = it }, Modifier.weight(1f), placeholder = { Text("או הקלד פקודה") },
+                typed, { typed = it }, Modifier.weight(1f), placeholder = { Text("הקלד פקודה או לחץ על המיקרופון") },
                 singleLine = true, shape = RoundedCornerShape(28.dp)
             )
+            FilledIconButton(
+                onClick = { if (s.listening) a.stopListening() else a.listen() },
+                modifier = Modifier.size(44.dp),
+                colors = IconButtonDefaults.filledIconButtonColors(containerColor = if (s.listening) cs.error else cs.primary)
+            ) { Icon(if (s.listening) Icons.Filled.Stop else Icons.Filled.Mic, "דבר", Modifier.size(22.dp)) }
             FilledIconButton(onClick = { if (typed.isNotBlank()) { a.typed(typed); typed = "" } }) {
                 Icon(Icons.AutoMirrored.Filled.Send, "שלח")
             }
-        }
-        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            MicButton(s.listening) { if (s.listening) a.stopListening() else a.listen() }
         }
     }
 }
