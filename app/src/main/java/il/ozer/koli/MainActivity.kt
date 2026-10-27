@@ -73,7 +73,7 @@ class MainActivity : ComponentActivity(), Ui {
             window.decorView.post { listen() }
     }
 
-    override fun onResume() { super.onResume(); state.tick++ }
+    override fun onResume() { super.onResume(); Scheduler.catchUp(this); state.tick++ }
     override fun onDestroy() { speech.stop(); tts.shutdown(); super.onDestroy() }
 
     // ---------- האזנה ----------

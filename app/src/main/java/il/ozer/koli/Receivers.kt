@@ -16,9 +16,10 @@ class AlarmReceiver : BroadcastReceiver() {
         Elog.add(c, "קפץ: $type \"$title\" (איחור $late שניות)")
         when (type) {
             "item" -> {
-                Notif.alert(c, id, "תזכורת", title)
                 val list = Store.items(c)
                 val it = list.firstOrNull { x -> x.id == id } ?: return
+                if (it.fired && it.repeat == "none") return
+                Notif.alert(c, id, "תזכורת", title)
                 val next = when (it.repeat) {
                     "daily" -> it.timeMs + 86_400_000L
                     "weekly" -> it.timeMs + 7 * 86_400_000L
